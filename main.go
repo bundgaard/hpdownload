@@ -60,16 +60,15 @@ func main() {
 			}
 		}
 	}
-
-	fmt.Println(strings.Repeat("=", 80))
-
-	fmt.Println(javascriptFile.String())
-	fmt.Println(strings.Repeat("=", 80))
-
 	if javascriptFile.Len() < 1 {
 		fmt.Fprintf(os.Stderr, "could not find %s", *element)
 		os.Exit(1)
 	}
+
+	fmt.Println(strings.Repeat("=", 80))
+	fmt.Println(javascriptFile.String())
+	fmt.Println(strings.Repeat("=", 80))
+
 	scanner := js.NewScanner(javascriptFile.String())
 	parser := js.NewParser(scanner)
 	program := parser.Parse()
