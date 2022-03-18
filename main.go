@@ -6,9 +6,8 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/bundgaard/js/eval"
+	"github.com/bundgaard/js"
 	"github.com/bundgaard/js/object"
-	"github.com/bundgaard/js/parser"
 	"io"
 	"io/ioutil"
 	"log"
@@ -73,11 +72,7 @@ func main() {
 	fmt.Println(strings.Repeat("=", 80))
 
 	_ = ioutil.WriteFile("site.html", javascriptFile.Bytes(), 0600)
-	p := parser.NewString(javascriptFile.String())
-	program := p.Parse()
-
-	environment := object.NewEnvironment()
-	eval.Eval(program, environment)
+	_, environment := js.New(javascriptFile.String())
 
 	fmt.Println(strings.Repeat("=", 80))
 	mediaURLObject, ok := environment.Get("media_0")
