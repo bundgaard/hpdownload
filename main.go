@@ -6,7 +6,11 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/bundgaard/js/eval"
+	"github.com/bundgaard/js/object"
+	"github.com/bundgaard/js/parser"
 	"io"
+	"io/ioutil"
 	"log"
 	"regexp"
 
@@ -15,7 +19,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bundgaard/js"
 	"github.com/google/uuid"
 	"golang.org/x/net/html"
 )
@@ -29,20 +32,20 @@ func main() {
 	flag.Parse()
 
 	if len(flag.Args()) < 1 {
-		fmt.Fprintf(os.Stderr, "not enough arguments\n")
+		_, _ = fmt.Fprintf(os.Stderr, "not enough arguments\n")
 		os.Exit(1)
 	}
 
 	url := flag.Args()[0]
 	pattern := regexp.MustCompile(`https?://`)
 	if !pattern.MatchString(url) {
-		fmt.Fprintf(os.Stderr, "wrong URL format\n")
+		_, _ = fmt.Fprintf(os.Stderr, "wrong URL format\n")
 		os.Exit(1)
 	}
 
 	buf := new(bytes.Buffer)
 	if err := download(buf, url); err != nil {
-		fmt.Fprintf(os.Stderr, "%v", err)
+		_, _ = fmt.Fprintf(os.Stderr, "%v", err)
 		os.Exit(1)
 	}
 
@@ -56,12 +59,12 @@ func main() {
 	for _, script := range scripts {
 		if script.FirstChild != nil {
 			if strings.Contains(script.FirstChild.Data, *element) {
-				fmt.Fprintf(javascriptFile, "%s", script.FirstChild.Data)
+				_, _ = fmt.Fprintf(javascriptFile, "%s", script.FirstChild.Data)
 			}
 		}
 	}
 	if javascriptFile.Len() < 1 {
-		fmt.Fprintf(os.Stderr, "could not find %s", *element)
+		_, _ = fmt.Fprintf(os.Stderr, "could not find %s", *element)
 		os.Exit(1)
 	}
 
@@ -69,24 +72,32 @@ func main() {
 	fmt.Println(javascriptFile.String())
 	fmt.Println(strings.Repeat("=", 80))
 
-	scanner := js.NewScanner(javascriptFile.String())
-	parser := js.NewParser(scanner)
-	program := parser.Parse()
+	_ = ioutil.WriteFile("site.html", javascriptFile.Bytes(), 0600)
+	p := parser.NewString(javascriptFile.String())
+	program := p.Parse()
 
-	environment := make(map[string]js.Object)
-	js.Eval(program, environment)
+	environment := object.NewEnvironment()
+	eval.Eval(program, environment)
 
 	fmt.Println(strings.Repeat("=", 80))
-	mediaURL := environment["media_0"].(*js.StringObject).Value
+	mediaURLObject, ok := environment.Get("media_0")
+	if !ok {
+		log.Fatal("failed to get media_0")
+	}
+	mediaURL := mediaURLObject.(*object.StringObject).Value
+	fmt.Printf("Environment %v\n", environment)
+	fmt.Println(strings.Repeat("=", 80))
 	fmt.Println("URL", mediaURL)
 	fmt.Println(strings.Repeat("=", 80))
+
 	req, _ := http.NewRequest("GET", mediaURL, nil)
+
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.131 Safari/537.36 Edg/92.0.902.73")
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("fish %v", err)
 	}
 	defer resp.Body.Close()
 
@@ -99,7 +110,7 @@ func main() {
 
 	var mediaList []Media
 	if err := json.NewDecoder(resp.Body).Decode(&mediaList); err != nil {
-		log.Fatal(err)
+		log.Fatalf("foo %v", err)
 	}
 
 	defaultQualityURL := ""
@@ -114,12 +125,12 @@ func main() {
 
 	dlinfo, err := httpClient.Head(defaultQualityURL)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%v", err)
+		_, _ = fmt.Fprintf(os.Stderr, "baz %v", err)
 		os.Exit(1)
 	}
 
 	if dlinfo.StatusCode < 200 || dlinfo.StatusCode >= 400 {
-		fmt.Fprintf(os.Stderr, "http error %d %s", dlinfo.StatusCode, dlinfo.Status)
+		_, _ = fmt.Fprintf(os.Stderr, "http error %d %s", dlinfo.StatusCode, dlinfo.Status)
 		os.Exit(1)
 	}
 	fmt.Printf("dlinfo %d %s\n", dlinfo.StatusCode, dlinfo.Status)
@@ -140,7 +151,7 @@ func main() {
 					return
 				default:
 					for _, c := range `-\|/` {
-						fmt.Fprintf(os.Stdout, "\r%c", c)
+						_, _ = fmt.Fprintf(os.Stdout, "\r%c", c)
 						time.Sleep(100 * time.Millisecond)
 					}
 				}
@@ -155,11 +166,11 @@ func main() {
 
 		videoFile, err := os.Create(uuid.NewString() + ".mp4")
 		if err != nil {
-			log.Fatal(err)
+			log.Fatalf("oscar %v", err)
 		}
 		defer videoFile.Close()
 
-		io.Copy(videoFile, videoResp.Body)
+		_, _ = io.Copy(videoFile, videoResp.Body)
 		cancelFn()
 	}
 

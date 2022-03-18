@@ -39,7 +39,7 @@ func download(w io.Writer, url string) error {
 		fmt.Println(c)
 	}
 
-	io.Copy(w, resp.Body)
+	_, _ = io.Copy(w, resp.Body)
 	defer resp.Body.Close()
 	return nil
 
