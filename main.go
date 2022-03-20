@@ -7,11 +7,11 @@ import (
 	"flag"
 	"fmt"
 	"github.com/bundgaard/js"
-	"github.com/bundgaard/js/object"
 	"io"
 	"io/ioutil"
 	"log"
 	"regexp"
+	"sync"
 
 	"net/http"
 	"os"
@@ -75,11 +75,12 @@ func main() {
 	_, environment := js.New(javascriptFile.String())
 
 	fmt.Println(strings.Repeat("=", 80))
-	mediaURLObject, ok := environment.Get("media_0")
-	if !ok {
-		log.Fatal("failed to get media_0")
+	mediaURL, err := environment.GetString("media_0")
+	if err != nil {
+		log.Fatal("failed to get media_0", err)
 	}
-	mediaURL := mediaURLObject.(*object.StringObject).Value
+	baseURLIdx := strings.LastIndex(mediaURL, "/")
+	baseURL := mediaURL[:baseURLIdx+1]
 	fmt.Printf("Environment %v\n", environment)
 	fmt.Println(strings.Repeat("=", 80))
 	fmt.Println("URL", mediaURL)
@@ -96,6 +97,33 @@ func main() {
 	}
 	defer resp.Body.Close()
 
+	content, _ := ioutil.ReadAll(resp.Body)
+
+	ioutil.WriteFile("master.m3u8", content, 0600)
+
+	ch1 := make(chan string)
+
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+		link := <-ch1
+		fmt.Printf("Link %s", baseURL+link)
+		resp, err := http.Get(baseURL + link)
+		if err != nil {
+			log.Println(err)
+		}
+		content, _ := ioutil.ReadAll(resp.Body)
+		fmt.Printf("%d %s %s\n", resp.StatusCode, resp.Status, content)
+	}()
+	if err := readM3U8(content, ch1); err != nil {
+		log.Fatal(err)
+	}
+
+	wg.Wait()
+	os.Exit(0)
 	type Media struct {
 		DefaultQuality bool   `json:"defaultQuality"`
 		Format         string `json:"format"`
