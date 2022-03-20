@@ -25,9 +25,10 @@ import (
 var (
 	element    = flag.String("node", "", "element to extract")
 	doDownload = flag.Bool("download", false, "download the file")
+	url        string
 )
 
-func main() {
+func init() {
 	flag.Parse()
 
 	if len(flag.Args()) < 1 {
@@ -35,12 +36,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	url := flag.Args()[0]
+	url = flag.Args()[0]
 	pattern := regexp.MustCompile(`https?://`)
 	if !pattern.MatchString(url) {
 		_, _ = fmt.Fprintf(os.Stderr, "wrong URL format\n")
 		os.Exit(1)
 	}
+}
+
+func main() {
 
 	buf := new(bytes.Buffer)
 	if err := download(buf, url); err != nil {
@@ -66,10 +70,6 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "could not find %s", *element)
 		os.Exit(1)
 	}
-
-	fmt.Println(strings.Repeat("=", 80))
-	fmt.Println(javascriptFile.String())
-	fmt.Println(strings.Repeat("=", 80))
 
 	_ = ioutil.WriteFile("site.html", javascriptFile.Bytes(), 0600)
 	_, environment := js.New(javascriptFile.String())
@@ -102,6 +102,7 @@ func main() {
 	ioutil.WriteFile("master.m3u8", content, 0600)
 
 	ch1 := make(chan string)
+	ch2 := make(chan string)
 
 	var wg sync.WaitGroup
 
@@ -117,6 +118,23 @@ func main() {
 		}
 		content, _ := ioutil.ReadAll(resp.Body)
 		fmt.Printf("%d %s %s\n", resp.StatusCode, resp.Status, content)
+		if err := readM3U8(content, ch2); err != nil {
+			log.Fatal(err)
+		}
+
+	}()
+
+	go func() {
+		tsFile, err := os.Create("filename.ts")
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer tsFile.Close()
+
+		for endpoint := range ch2 {
+			downloadTransportStream(tsFile, baseURL, endpoint)
+		}
+
 	}()
 	if err := readM3U8(content, ch1); err != nil {
 		log.Fatal(err)
@@ -196,5 +214,20 @@ func main() {
 		_, _ = io.Copy(videoFile, videoResp.Body)
 		cancelFn()
 	}
+
+}
+
+func downloadTransportStream(tsFile *os.File, baseURL, endpoint string) {
+	response, err := http.Get(baseURL + endpoint)
+	if err != nil {
+		log.Println(err)
+	}
+
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusBadRequest {
+		log.Printf("%d %s", response.StatusCode, response.Status)
+		return
+	}
+
+	_, _ = io.Copy(tsFile, response.Body)
 
 }

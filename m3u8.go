@@ -23,8 +23,12 @@ func readM3U8(content []byte, out chan string) error {
 			fmt.Printf("skipping %q\n", line)
 			continue
 		}
+		if bytes.Equal(line, []byte("#EXT-X-ENDLIST")) {
+			close(out)
+		}
 		fmt.Printf("download this %s\n", line)
 		out <- fmt.Sprintf("%s", line)
+
 	}
 	return nil
 }
