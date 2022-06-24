@@ -7,19 +7,18 @@ import (
 	"flag"
 	"fmt"
 	"github.com/bundgaard/js"
+	"github.com/google/uuid"
 	"io"
 	"io/ioutil"
 	"log"
 	"regexp"
 	"sync"
+	"time"
 
+	"golang.org/x/net/html"
 	"net/http"
 	"os"
 	"strings"
-	"time"
-
-	"github.com/google/uuid"
-	"golang.org/x/net/html"
 )
 
 var (
@@ -141,7 +140,7 @@ func main() {
 	}
 
 	wg.Wait()
-	os.Exit(0)
+
 	type Media struct {
 		DefaultQuality bool   `json:"defaultQuality"`
 		Format         string `json:"format"`
@@ -183,38 +182,41 @@ func main() {
 
 	if *doDownload {
 
-		ctxCancel, cancelFn := context.WithCancel(context.Background())
-
-		go func(ctx context.Context) {
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				default:
-					for _, c := range `-\|/` {
-						_, _ = fmt.Fprintf(os.Stdout, "\r%c", c)
-						time.Sleep(100 * time.Millisecond)
-					}
-				}
-			}
-		}(ctxCancel)
-		videoResp, err := httpClient.Get(defaultQualityURL)
-
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer resp.Body.Close()
-
-		videoFile, err := os.Create(uuid.NewString() + ".mp4")
-		if err != nil {
-			log.Fatalf("oscar %v", err)
-		}
-		defer videoFile.Close()
-
-		_, _ = io.Copy(videoFile, videoResp.Body)
-		cancelFn()
+		downloadSomething(defaultQualityURL)
 	}
 
+}
+func downloadSomething(defaultQualityURL string) {
+	ctxCancel, cancelFn := context.WithCancel(context.Background())
+
+	go func(ctx context.Context) {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				for _, c := range `-\|/` {
+					_, _ = fmt.Fprintf(os.Stdout, "\r%c", c)
+					time.Sleep(100 * time.Millisecond)
+				}
+			}
+		}
+	}(ctxCancel)
+	videoResp, err := httpClient.Get(defaultQualityURL)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer videoResp.Body.Close()
+
+	videoFile, err := os.Create(uuid.NewString() + ".mp4")
+	if err != nil {
+		log.Fatalf("oscar %v", err)
+	}
+	defer videoFile.Close()
+
+	_, _ = io.Copy(videoFile, videoResp.Body)
+	cancelFn()
 }
 
 func downloadTransportStream(tsFile *os.File, baseURL, endpoint string) {
