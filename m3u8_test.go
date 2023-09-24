@@ -8,7 +8,7 @@ import (
 )
 
 func TestM3U8(t *testing.T) {
-	m3u8Channel := make(chan string, 0)
+	m3u8Channel := make(chan string)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {

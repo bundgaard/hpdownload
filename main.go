@@ -6,19 +6,22 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/bundgaard/js"
-	"github.com/google/uuid"
 	"io"
-	"io/ioutil"
 	"log"
 	"regexp"
+	"sort"
 	"sync"
 	"time"
 
-	"golang.org/x/net/html"
+	"github.com/bundgaard/js"
+	"github.com/bundgaard/js/object"
+	"github.com/google/uuid"
+
 	"net/http"
 	"os"
 	"strings"
+
+	"golang.org/x/net/html"
 )
 
 var (
@@ -70,22 +73,37 @@ func main() {
 		os.Exit(1)
 	}
 
-	_ = ioutil.WriteFile("site.html", javascriptFile.Bytes(), 0600)
+	_ = os.WriteFile("site.html", buf.Bytes(), 0600)
+	_ = os.WriteFile("site.js", javascriptFile.Bytes(), 0600)
 	_, environment := js.New(javascriptFile.String())
 
 	fmt.Println(strings.Repeat("=", 80))
-	mediaURL, err := environment.GetString("media_0")
-	if err != nil {
-		log.Fatal("failed to get media_0", err)
-	}
-	baseURLIdx := strings.LastIndex(mediaURL, "/")
-	baseURL := mediaURL[:baseURLIdx+1]
 	fmt.Printf("Environment %v\n", environment)
 	fmt.Println(strings.Repeat("=", 80))
-	fmt.Println("URL", mediaURL)
-	fmt.Println(strings.Repeat("=", 80))
 
-	req, _ := http.NewRequest("GET", mediaURL, nil)
+	obj, ok := environment.Get(AN_ELEMENT)
+	if !ok {
+		log.Fatal("failed to get flashvars\n")
+	}
+	walkHashMap(obj.(*object.Hash))
+
+	if len(mediadefinitions) == 0 {
+		log.Fatal("failed to get media definitions")
+	}
+
+	sort.Slice(mediadefinitions, func(i, j int) bool {
+		return mediadefinitions[i].Quality > mediadefinitions[j].Quality
+	})
+	md := mediadefinitions[0]
+
+	fmt.Println(md.VideoURL)
+
+	baseURLIdx := strings.LastIndex(md.VideoURL, "/")
+	baseURL := md.VideoURL[:baseURLIdx+1]
+	fmt.Println(strings.Repeat("=", 80))
+	fmt.Println("URL", md.VideoURL)
+	fmt.Println(strings.Repeat("=", 80))
+	req, _ := http.NewRequest("GET", md.VideoURL, nil)
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.131 Safari/537.36 Edg/92.0.902.73")
@@ -96,9 +114,9 @@ func main() {
 	}
 	defer resp.Body.Close()
 
-	content, _ := ioutil.ReadAll(resp.Body)
+	content, _ := io.ReadAll(resp.Body)
 
-	ioutil.WriteFile("master.m3u8", content, 0600)
+	os.WriteFile("master.m3u8", content, 0600)
 
 	ch1 := make(chan string)
 	ch2 := make(chan string)
@@ -115,7 +133,7 @@ func main() {
 		if err != nil {
 			log.Println(err)
 		}
-		content, _ := ioutil.ReadAll(resp.Body)
+		content, _ := io.ReadAll(resp.Body)
 		fmt.Printf("%d %s %s\n", resp.StatusCode, resp.Status, content)
 		if err := readM3U8(content, ch2); err != nil {
 			log.Fatal(err)

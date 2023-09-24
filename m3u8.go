@@ -27,7 +27,7 @@ func readM3U8(content []byte, out chan string) error {
 			close(out)
 		}
 		fmt.Printf("download this %s\n", line)
-		out <- fmt.Sprintf("%s", line)
+		out <- string(line)
 
 	}
 	return nil
