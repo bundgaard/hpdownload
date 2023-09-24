@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -48,6 +50,23 @@ func init() {
 	}
 }
 
+type InteractionStatistic struct {
+	Type                 string `json:"@type"`
+	InteractionType      string `json:"interactionType"`
+	UserInteractionCount string `json:"userInteractionCount"`
+}
+
+type LDJSON struct {
+	Context              string                 `json:"@context"`
+	Type                 string                 `json:"@type"`
+	Name                 string                 `json:"name"`
+	ThumbnailURL         string                 `json:"thumbnailUrl"`
+	UploadDate           string                 `json:"uploadDate"`
+	Description          string                 `json:"description"`
+	Author               string                 `json:"author"`
+	InteractionStatistic []InteractionStatistic `json:"interactionStatistic"`
+}
+
 func main() {
 
 	buf := new(bytes.Buffer)
@@ -62,31 +81,58 @@ func main() {
 		log.Fatal(err)
 	}
 
+	var ljdson LDJSON
+
+	var ldjsonStr string
 	javascriptFile := new(bytes.Buffer)
 	for _, script := range scripts {
-		if script.FirstChild != nil {
-			if strings.Contains(script.FirstChild.Data, *element) {
-				_, _ = fmt.Fprintf(javascriptFile, "%s", script.FirstChild.Data)
+		for _, attr := range script.Attr {
+			if attr.Key == "type" && attr.Val == "application/ld+json" {
+				fmt.Println(script.FirstChild.Data)
+				ldjsonStr = script.FirstChild.Data
+				json.Unmarshal([]byte(script.FirstChild.Data), &ljdson)
 			}
 		}
 	}
+	for _, script := range scripts {
+		if script.FirstChild != nil {
+			fmt.Println(script.FirstChild.Data)
+			if strings.Contains(script.FirstChild.Data, "flashvar") {
+				_, _ = fmt.Fprintf(javascriptFile, "%s", script.FirstChild.Data)
+			}
+
+		}
+	}
+
 	if javascriptFile.Len() < 1 {
 		_, _ = fmt.Fprintf(os.Stderr, "could not find %s", *element)
 		os.Exit(1)
 	}
 
-	_ = os.WriteFile("site.html", buf.Bytes(), 0600)
-	_ = os.WriteFile("site.js", javascriptFile.Bytes(), 0600)
+	filenameSha := sha256.New()
+	filenameSha.Write([]byte(ljdson.Name))
+	filename := hex.EncodeToString(filenameSha.Sum(nil))
+
+	// 	_ = os.WriteFile(filename+".html", bufCopy.Bytes(), 0600)
+	_ = os.WriteFile(filename+".js", javascriptFile.Bytes(), 0600)
+	_ = os.WriteFile(filename+".json", []byte(ldjsonStr), 0600)
 	_, environment := js.New(javascriptFile.String())
 
 	fmt.Println(strings.Repeat("=", 80))
 	fmt.Printf("Environment %v\n", environment)
 	fmt.Println(strings.Repeat("=", 80))
+	var AN_ELEMENT string
+	environment.ForEach(func(key string, val object.Object) {
+		if strings.Contains(key, "flashvar") {
+			AN_ELEMENT = key
+		}
+	})
 
 	obj, ok := environment.Get(AN_ELEMENT)
 	if !ok {
-		log.Fatal("failed to get flashvars\n")
+		log.Fatal("failed to get" + AN_ELEMENT + "\n")
 	}
+
 	walkHashMap(obj.(*object.Hash))
 
 	if len(mediadefinitions) == 0 {
@@ -146,8 +192,8 @@ func main() {
 
 	}()
 
-	go func() {
-		tsFile, err := os.Create("filename.ts")
+	go func(filename string) {
+		tsFile, err := os.Create(filename + ".ts")
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -157,7 +203,8 @@ func main() {
 			downloadTransportStream(tsFile, baseURL, endpoint)
 		}
 
-	}()
+	}(filename)
+
 	if err := readM3U8(content, ch1); err != nil {
 		log.Fatal(err)
 	}
