@@ -1,7 +1,7 @@
 package main
 
 import (
-	"io/ioutil"
+	"io"
 	"os"
 	"sync"
 	"testing"
@@ -25,7 +25,7 @@ func TestM3U8(t *testing.T) {
 		t.Fail()
 	}
 
-	content, _ := ioutil.ReadAll(fd)
+	content, _ := io.ReadAll(fd)
 	if err := readM3U8(content, m3u8Channel); err != nil {
 		t.Errorf("%v", err)
 	}

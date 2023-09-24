@@ -34,7 +34,9 @@ func init() {
 	flag.Parse()
 
 	if len(flag.Args()) < 1 {
+		flag.Usage()
 		_, _ = fmt.Fprintf(os.Stderr, "not enough arguments\n")
+
 		os.Exit(1)
 	}
 
@@ -100,9 +102,12 @@ func main() {
 
 	baseURLIdx := strings.LastIndex(md.VideoURL, "/")
 	baseURL := md.VideoURL[:baseURLIdx+1]
+
 	fmt.Println(strings.Repeat("=", 80))
 	fmt.Println("URL", md.VideoURL)
+	fmt.Println("BaseURL", baseURL)
 	fmt.Println(strings.Repeat("=", 80))
+
 	req, _ := http.NewRequest("GET", md.VideoURL, nil)
 
 	req.Header.Set("Content-Type", "application/json")
